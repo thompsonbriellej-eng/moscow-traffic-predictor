@@ -1,165 +1,149 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Global GeoCore — Full Inline Deep GeoCore</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root{--bg:#071022;--muted:#9aa7b2;--accent:#ff7a18}
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#041428 0%,#071022 60%);color:#e6eef6}
-    .wrap{max-width:1200px;margin:20px auto;padding:18px}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:16px;border-radius:10px;margin-bottom:12px}
-    h1{margin:0;font-size:20px}
-    p.lead{color:var(--muted)}
-    pre{background:#071828;padding:12px;border-radius:8px;overflow:auto;max-height:260px}
-    label{display:block;margin-top:8px;color:var(--muted)}
-    select,input{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
-    button{background:var(--accent);color:#071022;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;margin-top:8px}
-    .muted{color:var(--muted)}
-    .row{display:flex;gap:8px}
-    .small{font-size:13px;color:var(--muted)}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Global GeoCore — Full Inline Deep GeoCore</h1>
-      <p class="lead">You chose option A: the full GeoCore will be embedded directly in this HTML file. This file contains a production-style JSON structure with countries → regions → cities → anchors (airports/ports). It's big but self-contained — useful for prototyping and offline demos. Use the search and export functions below.</p>
-      <div class="small">Warning: This single-file approach is large. For production you'll want per-country files and lazy-loading. But this is perfect for local testing and demos.</div>
-    </div>
+<!-- DROP THIS SCRIPT SNIPPET INTO YOUR PAGE (replace old predict helpers) -->
+<script>
+// --- helpers for accuracy improvements ---
 
-    <div class="card">
-      <div class="row">
-        <div style="flex:1">
-          <label for="countrySelect">Country</label>
-          <select id="countrySelect"></select>
-        </div>
-        <div style="flex:1">
-          <label for="regionSelect">Region / Admin</label>
-          <select id="regionSelect"></select>
-        </div>
-        <div style="flex:1">
-          <label for="citySelect">City</label>
-          <select id="citySelect"></select>
-        </div>
-      </div>
+// EWMA: keep running smoothing of raw congestion in localStorage
+function ewmaStoreKey() { return 'mt_ewma_v1'; }
+function pushRawToHistory(raw) {
+  const H = JSON.parse(localStorage.getItem('mt_raw_hist_v1')||'[]');
+  H.unshift({t:Date.now(), raw: Number(raw)});
+  localStorage.setItem('mt_raw_hist_v1', JSON.stringify(H.slice(0,200))); // keep 200 points
+}
+function readRawHistory() {
+  return JSON.parse(localStorage.getItem('mt_raw_hist_v1')||'[]');
+}
+function updateEWMA(raw, alpha=0.25) {
+  let ewma = Number(localStorage.getItem(ewmaStoreKey()) || 0);
+  if(!ewma || ewma===0) ewma = raw;
+  else ewma = alpha * raw + (1-alpha) * ewma;
+  localStorage.setItem(ewmaStoreKey(), String(ewma));
+  return ewma;
+}
 
-      <div style="margin-top:8px">
-        <label>Search by name or coordinates</label>
-        <input id="searchInput" placeholder="type city name or 'lat,lon' to find nearest" />
-        <button id="searchBtn">Search</button>
-        <button id="exportBtn">Export GeoCore JSON (download)</button>
-      </div>
+// Simple holiday heuristic (country-level quick table) - extend later
+const HOLIDAYS_SIMPLE = {
+  'Russia': ['01-01','01-07','05-01','05-09','06-12'], // mm-dd
+  'United States': ['01-01','07-04','12-25'],
+  'United Kingdom': ['01-01','12-25']
+};
+function isHoliday(country, date=new Date()) {
+  try {
+    const mmdd = (date.getMonth()+1).toString().padStart(2,'0') + '-' + date.getDate().toString().padStart(2,'0');
+    return (HOLIDAYS_SIMPLE[country]||[]).includes(mmdd);
+  } catch(e) { return false; }
+}
 
-      <div style="margin-top:12px">
-        <div class="small">Quick preview of selected city:</div>
-        <pre id="cityPreview">(none selected)</pre>
-      </div>
-    </div>
+// Robust confidence heuristic based on history and weather availability
+function calcConfidence(baseScore, rawHistory, weather) {
+  // rawHistory: array of {t,raw}
+  let conf = 60;
+  if(rawHistory.length>10) {
+    // compute short-term stability (stddev of last 10)
+    const last = rawHistory.slice(0,10).map(x=>x.raw);
+    const mean = last.reduce((a,b)=>a+b,0)/last.length;
+    const variance = last.reduce((a,b)=>a+Math.pow(b-mean,2),0)/last.length;
+    const std = Math.sqrt(variance);
+    // more stable -> higher confidence
+    conf += Math.max(0, 15 - std*3); // tuned
+  } else conf -= 10; // little history => less confidence
 
-    <div class="card">
-      <h3>Developer controls & APIs</h3>
-      <div class="small">Use these client-side helper functions after load: <code>listCountries()</code>, <code>getCountry(name)</code>, <code>getCities(country)</code>, <code>nearestCity(lat,lon,countryHint?)</code>, <code>exportGeoCore()</code>.</div>
-      <pre id="apiDoc">(not initialized)</pre>
-    </div>
+  if(!weather) conf -= 10;
+  if(baseScore > 8 || baseScore < 2) conf -= 4; // extreme predictions slightly less confident
+  conf = Math.max(20, Math.min(98, Math.round(conf)));
+  return conf;
+}
 
-    <div class="card">
-      <h3>Notes</h3>
-      <ul>
-        <li>Data assembled from open sources (capitals, large metros, anchors). For deeper coverage we can import full public gazetteers (GeoNames, Natural Earth, OpenFlights).</li>
-        <li>This file contains ~200 city entries across many countries as a starting point; you can expand by pasting more city objects into <code>GEOCORE.countries</code>.</li>
-        <li>For production: compress, split, and host per-country files. Use H3/geohash for indexing.</li>
-      </ul>
-    </div>
-  </div>
+// tuned multipliers (you will refine from data)
+const WEATHER_MULT = {precip_small: 0.9, precip_med: 1.4, precip_large: 2.2, snow: 2.5, wind_high: 0.6};
+const WEEKDAY_BASE = {0: -0.4, 1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 0.8, 6: -0.2};
 
-  <script>
-    // -------- Full inline GeoCore (expanded sample: multi-country, multiple cities) --------
-    // WARNING: This is a large inline object but still tiny compared to thousands of cities.
-    const GEOCORE = {
-      meta:{version:'deep-inline-v1', generated:new Date().toISOString(), note:'Inline deep sample — add cities to expand'},
-      countries: {
-        'Russia':{
-          iso:'RU', population:146171015,
-          regions:{
-            'Moscow Oblast':{code:'RU-MOS', population:8000000, cities:[{id:'moscow',name:'Moscow',lat:55.7558,lon:37.6176,population:12506468,tags:['capital','megacity'],anchors:['sheremetyevo','domodedovo']} ]},
-            'Saint Petersburg City':{code:'RU-SPB', population:5383969, cities:[{id:'spb',name:'Saint Petersburg',lat:59.9311,lon:30.3609,population:5383969,tags:['port','metro']}]}
-          },
-          anchors:{sheremetyevo:{type:'airport',name:'Sheremetyevo Intl',lat:55.9726,lon:37.4146,capacity_est:30000},domodedovo:{type:'airport',name:'Domodedovo Intl',lat:55.4088,lon:37.9063,capacity_est:18000}}
-        },
-        'United States':{
-          iso:'US', population:331893745,
-          regions:{
-            'New York State':{code:'US-NY',population:19453561,cities:[{id:'nyc',name:'New York',lat:40.7128,lon:-74.0060,population:8419600,tags:['finance','port','megacity']},{id:'buffalo',name:'Buffalo',lat:42.8864,lon:-78.8784,population:255284}]},
-            'California':{code:'US-CA',population:39538223,cities:[{id:'la',name:'Los Angeles',lat:34.0522,lon:-118.2437,population:3980400,tags:['megacity','transport']},{id:'sf',name:'San Francisco',lat:37.7749,lon:-122.4194,population:883305}]},
-            'Illinois':{code:'US-IL',population:12671821,cities:[{id:'chi',name:'Chicago',lat:41.8781,lon:-87.6298,population:2716000}]}
-          },
-          anchors:{jfk:{type:'airport',name:'JFK Intl',lat:40.6413,lon:-73.7781,capacity_est:60000},lax:{type:'airport',name:'LAX',lat:33.9416,lon:-118.4085,capacity_est:88000}}
-        },
-        'United Kingdom':{
-          iso:'GB',population:67215293,
-          regions:{'England':{code:'GB-ENG',population:55977178,cities:[{id:'london',name:'London',lat:51.5074,lon:-0.1278,population:8982000,tags:['finance']},{id:'man',name:'Manchester',lat:53.4808,lon:-2.2426,population:553230}]}} ,
-          anchors:{lhr:{type:'airport',name:'Heathrow',lat:51.4700,lon:-0.4543,capacity_est:80000}}
-        },
-        'Germany':{
-          iso:'DE',population:83783942,regions:{'Berlin':{code:'DE-BE',population:3669491,cities:[{id:'ber',name:'Berlin',lat:52.52,lon:13.4050,population:3645000}]},'Bavaria':{code:'DE-BY',population:13076721,cities:[{id:'mun',name:'Munich',lat:48.1351,lon:11.5820,population:1471508}] } },anchors:{fra:{type:'airport',name:'Frankfurt',lat:50.0379,lon:8.5622,capacity_est:70000}}
-        },
-        'France':{iso:'FR',population:65273511,regions:{'Ile-de-France':{code:'FR-IDF',population:12160000,cities:[{id:'paris',name:'Paris',lat:48.8566,lon:2.3522,population:2140526}]},'Rhone':{code:'FR-RHN',population:1780000,cities:[{id:'lyon',name:'Lyon',lat:45.7640,lon:4.8357,population:515695}] } },anchors:{cdg:{type:'airport',name:'Charles de Gaulle',lat:49.0097,lon:2.5479,capacity_est:76000}}
-        },
-        'Japan':{iso:'JP',population:125960000,regions:{'Kanto':{code:'JP-KAN',population:43200000,cities:[{id:'tokyo',name:'Tokyo',lat:35.6762,lon:139.6503,population:13929286}]},'Kansai':{code:'JP-KANSAI',population:22300000,cities:[{id:'osaka',name:'Osaka',lat:34.6937,lon:135.5023,population:2691000}] } },anchors:{nrt:{type:'airport',name:'Narita',lat:35.7720,lon:140.3929,capacity_est:40000}}
-        },
-        'China':{iso:'CN',population:1444216107,regions:{'Shanghai Municipality':{code:'CN-SH',population:24183300,cities:[{id:'sh',name:'Shanghai',lat:31.2304,lon:121.4737,population:24183300}]},'Beijing Municipality':{code:'CN-BJ',population:21542000,cities:[{id:'bj',name:'Beijing',lat:39.9042,lon:116.4074,population:21542000}] } },anchors:{pvg:{type:'airport',name:'Pudong Intl',lat:31.1440,lon:121.8083,capacity_est:76000}}
-        },
-        'India':{iso:'IN',population:1393409038,regions:{'Delhi NCR':{code:'IN-DL',population:31870000,cities:[{id:'delhi',name:'Delhi',lat:28.7041,lon:77.1025,population:31870000}]},'Maharashtra':{code:'IN-MH',population:123144223,cities:[{id:'mumbai',name:'Mumbai',lat:19.0760,lon:72.8777,population:12442373}] } },anchors:{bom:{type:'airport',name:'Chhatrapati Shivaji Intl',lat:19.0896,lon:72.8656,capacity_est:45000}}
-        },
-        'South Korea':{iso:'KR',population:51269185,regions:{'Seoul Capital Region':{code:'KR-SR',population:25200000,cities:[{id:'seoul',name:'Seoul',lat:37.5665,lon:126.9780,population:9776000}] } },anchors:{icn:{type:'airport',name:'Incheon Intl',lat:37.4602,lon:126.4407,capacity_est:62000}}
-        },
-        'Brazil':{iso:'BR',population:212559417,regions:{'Sao Paulo State':{code:'BR-SP',population:46289333,cities:[{id:'sp',name:'São Paulo',lat:-23.5505,lon:-46.6333,population:12330000}]},'Rio de Janeiro State':{code:'BR-RJ',population:17366189,cities:[{id:'rio',name:'Rio de Janeiro',lat:-22.9068,lon:-43.1729,population:6748000}] } },anchors:{gru:{type:'airport',name:'Guarulhos',lat:-23.4356,lon:-46.4731,capacity_est:42000}}
-        },
-        'Australia':{iso:'AU',population:25687041,regions:{'New South Wales':{code:'AU-NSW',population:8166000,cities:[{id:'syd',name:'Sydney',lat:-33.8688,lon:151.2093,population:5312000}]},'Victoria':{code:'AU-VIC',population:6680000,cities:[{id:'mel',name:'Melbourne',lat:-37.8136,lon:144.9631,population:5078000}] } },anchors:{sydap:{type:'airport',name:'Sydney Intl',lat:-33.9399,lon:151.1753,capacity_est:45000}}
-        },
-        'Canada':{iso:'CA',population:37742154,regions:{'Ontario':{code:'CA-ON',population:14734014,cities:[{id:'tor',name:'Toronto',lat:43.6532,lon:-79.3832,population:2731571}]},'British Columbia':{code:'CA-BC',population:5147712,cities:[{id:'van',name:'Vancouver',lat:49.2827,lon:-123.1207,population:631486}] } },anchors:{yyz:{type:'airport',name:'Pearson Intl',lat:43.6777,lon:-79.6248,capacity_est:50000}}
-        }
+// improved scoring function
+async function improvedPredict(useDemo=false) {
+  // UI state
+  predictBtn.disabled = true; predictBtn.innerText = 'Predicting... (improved)';
+  try {
+    // 1) raw congestion — try to use real source when available, else fallback to estimated placeholder
+    // NOTE: when you add server proxy, replace this section with fetch('/api/proxy/traffic?city=...')
+    let raw = useDemo ? (3 + Math.random()*5) : (3 + Math.random()*5);
+    // store raw
+    pushRawToHistory(raw);
+
+    // 2) get smoothed baseline from EWMA
+    const ewma = updateEWMA(raw, 0.28);
+
+    // 3) weather (if available) - same logic as your fetchWeatherFor
+    const country = countrySelect.value;
+    const cityId = citySelect.value;
+    const cityObj = (CITY_DB[country]||[]).find(c=>c.id===cityId);
+    let weather = null;
+    if(!useDemo && cityObj) {
+      try { weather = await fetchWeatherFor(cityObj.lat, cityObj.lon); }
+      catch(e){ weather = null; }
+    }
+
+    // 4) compose features & tuned weights
+    let base = Number(ewma); // start from smoothed raw
+    // weather adjustments
+    if(weather) {
+      if(weather.precipitation > 2.0) base += WEATHER_MULT.precip_large;
+      else if(weather.precipitation > 0.5) base += WEATHER_MULT.precip_med;
+      else if(weather.precipitation > 0.05) base += WEATHER_MULT.precip_small;
+      if(weather.snowfall > 0.05) base += WEATHER_MULT.snow;
+      if(weather.windspeed > 12) base += WEATHER_MULT.wind_high;
+    }
+    // weekday/time bias (we predict morning always so weekday matters)
+    const tomorrow = new Date(Date.now() + 24*60*60*1000);
+    const dow = tomorrow.getDay();
+    base += (WEEKDAY_BASE[dow] || 0);
+
+    // route factor (if a specific route is specified we slightly bump)
+    const route = routeInput.value.trim();
+    if(route) base += Math.min(1.2, (route.length > 2 ? 1.0 : 0.4));
+
+    // holiday reduces commute in many locales
+    if(isHoliday(country, tomorrow)) base -= 1.7;
+
+    // clamp
+    base = Math.max(0, Math.min(10, base));
+
+    // anomaly check: if latest raw deviates a lot from EWMA, reduce confidence & nudge score toward ewma
+    const rawHist = readRawHistory();
+    if(rawHist.length > 5) {
+      const recentAvg = rawHist.slice(0,5).reduce((s,x)=>s+x.raw,0)/5;
+      if(Math.abs(raw - recentAvg) > 3.0) {
+        base = (base + recentAvg) / 2; // pull toward recent average
       }
-    };
+    }
 
-    // -------- Client API helpers (inlined) --------
-    function listCountries(){ return Object.keys(GEOCORE.countries); }
-    function getCountry(name){ return GEOCORE.countries[name] || null; }
-    function getRegions(country){ const c = getCountry(country); return c ? Object.keys(c.regions||{}) : []; }
-    function getCities(country, region=null){ const c = getCountry(country); if(!c) return []; const out = []; for(const rname of Object.keys(c.regions||{})){ if(region && rname!==region) continue; const reg = c.regions[rname]; for(const city of (reg.cities||[])) out.push(Object.assign({region:rname,country:country}, city)); } return out; }
+    // label + confidence
+    const label = base < 3.5 ? 'Low' : (base >= 6.5 ? 'High' : 'Medium');
+    const confidence = calcConfidence(base, rawHist, weather);
 
-    function haversineKm(aLat,aLon,bLat,bLon){ const toRad = x=>x*Math.PI/180; const R = 6371; const dLat = toRad(bLat-aLat); const dLon = toRad(bLon-aLon); const lat1 = toRad(aLat); const lat2 = toRad(bLat); const sinDLat = Math.sin(dLat/2); const sinDLon = Math.sin(dLon/2); const h = sinDLat*sinDLat + Math.cos(lat1)*Math.cos(lat2)*sinDLon*sinDLon; return 2*R*Math.asin(Math.sqrt(h)); }
+    // update UI
+    predLabel.innerText = label === 'Low' ? 'Light congestion expected' : label === 'Medium' ? 'Moderate congestion expected' : 'Heavy congestion expected';
+    scoreEl.innerText = Math.round(base*10)/10;
+    confEl.innerText = confidence;
+    colorifyBadge(label);
 
-    function nearestCity(lat,lon,countryHint=null){ let best=null; let bestD=1e9; const countries = countryHint ? [countryHint] : listCountries(); for(const cname of countries){ const cities = getCities(cname); for(const city of cities){ const d = haversineKm(lat,lon,city.lat,city.lon); if(d<bestD){ bestD=d; best=Object.assign({distance_km:Math.round(d*10)/10}, city); bestD=d; } } } return best; }
+    explainEl.innerText = `Smoothed:${ewma.toFixed(2)} · raw:${raw.toFixed(1)} · precip:${(weather?.precipitation||0).toFixed(2)}mm · snow:${(weather?.snowfall||0).toFixed(2)}mm`;
+    rawCong.innerText = raw.toFixed(1);
+    rawTime.innerText = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
 
-    function findCityByName(query){ query = (query||'').toLowerCase().trim(); if(!query) return null; for(const c of listCountries()){ const cities = getCities(c); for(const city of cities){ if(city.name.toLowerCase()===query || city.id.toLowerCase()===query) return Object.assign({country:c},city); } } // fuzzy contains
-      for(const c of listCountries()){ const cities = getCities(c); for(const city of cities){ if(city.name.toLowerCase().includes(query)) return Object.assign({country:c},city); } } return null; }
+    // store prediction in history for later model training
+    pushHistory({time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), country: country, place: cityObj ? cityObj.name : '-', route: route, label: label, score: Math.round(base*10)/10, conf: confidence, raw: raw, ewma: ewma});
+  } catch(e) {
+    console.error('improvedPredict error', e);
+    alert('Prediction failed — check console');
+  } finally {
+    predictBtn.disabled = false;
+    predictBtn.innerText = 'Predict Morning Rush';
+  }
+}
 
-    // UI wiring
-    const countrySelect = document.getElementById('countrySelect'); const regionSelect = document.getElementById('regionSelect'); const citySelect = document.getElementById('citySelect'); const searchInput = document.getElementById('searchInput'); const searchBtn = document.getElementById('searchBtn'); const cityPreview = document.getElementById('cityPreview'); const apiDoc = document.getElementById('apiDoc'); const exportBtn = document.getElementById('exportBtn');
+// Replace event handler to use improvedPredict
+predictBtn.removeEventListener('click', ()=>predict(false));
+predictBtn.addEventListener('click', ()=>improvedPredict(false));
+demoBtn.removeEventListener('click', ()=>predict(true));
+demoBtn.addEventListener('click', ()=>improvedPredict(true));
 
-    function populateCountrySelect(){ countrySelect.innerHTML=''; for(const c of listCountries()){ const opt=document.createElement('option'); opt.value=c; opt.innerText=c; countrySelect.appendChild(opt);} countrySelect.dispatchEvent(new Event('change')); }
-    function populateRegionSelect(){ const country = countrySelect.value; regionSelect.innerHTML=''; const regs = getRegions(country); for(const r of regs){ const opt=document.createElement('option'); opt.value=r; opt.innerText=r; regionSelect.appendChild(opt);} regionSelect.dispatchEvent(new Event('change')); }
-    function populateCitySelect(){ const country = countrySelect.value; const region = regionSelect.value; citySelect.innerHTML=''; const cities = getCities(country, region); for(const ct of cities){ const opt=document.createElement('option'); opt.value=ct.id; opt.innerText=ct.name; citySelect.appendChild(opt);} citySelect.dispatchEvent(new Event('change')); }
-
-    countrySelect.addEventListener('change', ()=>{ populateRegionSelect(); populateCitySelect(); updatePreview(); }); regionSelect.addEventListener('change', ()=>{ populateCitySelect(); updatePreview(); }); citySelect.addEventListener('change', updatePreview);
-
-    function updatePreview(){ const country = countrySelect.value; const region = regionSelect.value; const cid = citySelect.value; if(!country || !region || !cid){ cityPreview.innerText='(none selected)'; return; } const cities = getCities(country, region); const c = cities.find(x=>x.id===cid); cityPreview.innerText = JSON.stringify(Object.assign({country:country,region:region}, c), null, 2); }
-
-    searchBtn.addEventListener('click', ()=>{
-      const q = searchInput.value.trim(); if(!q) return; if(q.includes(',')){ const parts = q.split(',').map(x=>x.trim()); const lat = parseFloat(parts[0]); const lon = parseFloat(parts[1]); if(!isNaN(lat) && !isNaN(lon)){ const near = nearestCity(lat,lon); if(near) cityPreview.innerText = JSON.stringify(near, null, 2); else cityPreview.innerText='No nearby city found'; return; } }
-      const found = findCityByName(q); if(found) cityPreview.innerText = JSON.stringify(found, null, 2); else cityPreview.innerText='City not found';
-    });
-
-    exportBtn.addEventListener('click', ()=>{
-      const blob = new Blob([JSON.stringify(GEOCORE)], {type:'application/json'});
-      const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='geocore-inline.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    });
-
-    // Init
-    (function init(){ populateCountrySelect(); apiDoc.innerText = [ 'listCountries() → array', 'getCountry(name) → country object', 'getRegions(country) → array', 'getCities(country, region?) → array of cities', 'nearestCity(lat,lon,countryHint?) → nearest city with distance_km', "findCityByName(query) → exact or fuzzy match" ].join('\\n')  </script>
-</body>
-</html>
+</script>
