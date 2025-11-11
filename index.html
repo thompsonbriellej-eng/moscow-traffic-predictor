@@ -1,67 +1,317 @@
-<script>
-// Robust dropdown wiring: safe to run even if elements load slowly or are missing.
-(function(){
-  // Guard: ensure CITY_DB exists
-  if(typeof CITY_DB === 'undefined'){ console.warn('CITY_DB missing'); window.CITY_DB = {}; return; }
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Global Traffic — Upgraded Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0b1220;--card:#0f1724;--muted:#9aa7b2;--accent:#ff7a18;--glass:rgba(255,255,255,0.03);--good:#16a34a;--warn:#f59e0b;--bad:#ef4444;--glass-2:rgba(255,255,255,0.02)}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#041028 0%,#071022 60%);color:#e6eef6}
+    .wrap{max-width:1200px;margin:28px auto;padding:18px}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#ffb37a);display:flex;align-items:center;justify-content:center;color:#071022;font-weight:800}
+    h1{margin:0;font-size:18px}
+    .subtitle{color:var(--muted);font-size:13px}
 
-  const countrySelect = document.getElementById('countrySelect');
-  const citySelect = document.getElementById('citySelect');
+    .grid{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:18px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
 
-  if(!countrySelect || !citySelect){
-    console.error('Dropdown elements missing: countrySelect or citySelect not found in DOM.');
-    return;
-  }
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+    input,select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .controls{display:flex;gap:10px;margin-top:10px}
+    .btn{background:var(--accent);border:none;color:#071022;padding:10px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
 
-  // Populate countries sorted
-  function populateCountries(){
-    countrySelect.innerHTML = '';
-    const countries = Object.keys(CITY_DB).sort();
-    for(const c of countries){
-      const opt = document.createElement('option');
-      opt.value = c;
-      opt.innerText = c;
-      countrySelect.appendChild(opt);
+    .result{display:flex;align-items:center;gap:14px}
+    .badge{padding:8px 12px;border-radius:999px;font-weight:800}
+    .badge.low{background:rgba(22,163,74,0.12);color:var(--good)}
+    .badge.med{background:rgba(245,158,11,0.12);color:var(--warn)}
+    .badge.high{background:rgba(239,68,68,0.12);color:var(--bad)}
+
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:13px;color:var(--muted)}
+
+    .map{height:220px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));display:flex;align-items:center;justify-content:center;font-size:13px}
+    .map svg{width:100%;height:100%;border-radius:8px}
+
+    .history{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+    .history .item{background:var(--glass-2);padding:10px;border-radius:8px;font-size:13px}
+
+    .row{display:flex;gap:12px;align-items:center}
+    .clock{font-weight:700}
+
+    .footer{margin-top:12px;color:var(--muted);font-size:13px}
+
+    .toggle{display:flex;align-items:center;gap:8px}
+    .switch{width:44px;height:26px;background:rgba(255,255,255,0.06);border-radius:999px;padding:4px;cursor:pointer}
+    .knob{width:18px;height:18px;border-radius:50%;background:white;transform:translateX(0);transition:transform .18s}
+    .switch.on{background:linear-gradient(90deg,#334155,#0ea5e9)}
+    .switch.on .knob{transform:translateX(18px)}
+
+    @media (max-width:920px){.grid{grid-template-columns:1fr}.map{height:180px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">
+        <div class="logo">GT</div>
+        <div>
+          <h1>Global Traffic — Alpha</h1>
+          <div class="subtitle">The seed of a global governance AI — browser-first, multi-city morning-rush predictions.</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="clock" id="clock">--:--</div>
+        <div style="width:12px"></div>
+        <div class="toggle">
+          <div class="small">Dark</div>
+          <div id="themeSwitch" class="switch" title="Toggle dark mode"><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div class="small">Country</div>
+            <select id="countrySelect"></select>
+          </div>
+          <div style="flex:1">
+            <div class="small">City</div>
+            <select id="citySelect"></select>
+          </div>
+          <div style="width:220px">
+            <div class="small">Bus route (optional)</div>
+            <input id="routeInput" placeholder="e.g., 12 or leave blank" />
+          </div>
+        </div>
+
+        <div class="controls" style="margin-top:14px">
+          <button class="btn" id="predictBtn">Predict Morning Rush</button>
+          <button class="btn ghost" id="demoBtn">Use Demo Data</button>
+          <button class="btn ghost" id="clearBtn">Clear History</button>
+        </div>
+
+        <div style="margin-top:18px">
+          <div class="small">Prediction for: <span id="predDate">—</span></div>
+          <div style="height:12px"></div>
+          <div class="result">
+            <div id="levelBadge" class="badge med">—</div>
+            <div>
+              <div id="predLabel" style="font-weight:800;font-size:20px">—</div>
+              <div class="muted">Score: <span id="score">—</span> &nbsp; • &nbsp; Confidence: <span id="confidence">—</span></div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="map" id="mapArea">
+            <!-- generic SVG map used as placeholder; city text updates via JS -->
+            <svg viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="600" height="300" fill="#071022" rx="8" />
+              <text id="mapCity" x="50%" y="50%" fill="#9aa7b2" font-size="18" text-anchor="middle">City preview</text>
+            </svg>
+          </div>
+
+          <div id="explain" class="small" style="margin-top:10px">Reasons: —</div>
+        </div>
+
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="small">Live Weather (tomorrow 7–10 AM)</div>
+            <div id="weatherSummary">—</div>
+          </div>
+          <div style="text-align:right">
+            <div class="small">Raw congestion</div>
+            <div id="rawCong" style="font-weight:800">—</div>
+            <div class="small" id="rawTime">—</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="small">History</div>
+          <div class="history" id="history"></div>
+        </div>
+
+        <div style="margin-top:12px" class="small">Notes: This is a browser-first demo. I can add a server proxy to log real historical data and remove CORS issues.</div>
+      </div>
+    </div>
+
+    <div class="footer">Built by you — this is the beginning of a global governance AI. Next: server proxy, data logging, ML training, and secure governance interfaces.</div>
+  </div>
+
+  <script>
+    // --- Global city dataset (country -> cities with lat/lon) ---
+    const CITY_DB = {
+      "Russia": [
+        {id:'moscow', name:'Moscow', lat:55.7558, lon:37.6176},
+        {id:'spb', name:'Saint Petersburg', lat:59.9311, lon:30.3609}
+      ],
+      "United States": [
+        {id:'nyc', name:'New York', lat:40.7128, lon:-74.0060},
+        {id:'la', name:'Los Angeles', lat:34.0522, lon:-118.2437},
+        {id:'chi', name:'Chicago', lat:41.8781, lon:-87.6298},
+        {id:'mia', name:'Miami', lat:25.7617, lon:-80.1918},
+        {id:'sf', name:'San Francisco', lat:37.7749, lon:-122.4194}
+      ],
+      "United Kingdom": [
+        {id:'london', name:'London', lat:51.5074, lon:-0.1278},
+        {id:'man', name:'Manchester', lat:53.4808, lon:-2.2426}
+      ],
+      "Germany": [
+        {id:'ber', name:'Berlin', lat:52.52, lon:13.4050},
+        {id:'mun', name:'Munich', lat:48.1351, lon:11.5820}
+      ],
+      "France": [
+        {id:'paris', name:'Paris', lat:48.8566, lon:2.3522},
+        {id:'lyon', name:'Lyon', lat:45.7640, lon:4.8357}
+      ],
+      "Japan": [
+        {id:'tokyo', name:'Tokyo', lat:35.6762, lon:139.6503},
+        {id:'osaka', name:'Osaka', lat:34.6937, lon:135.5023}
+      ],
+      "China": [
+        {id:'sh', name:'Shanghai', lat:31.2304, lon:121.4737},
+        {id:'bj', name:'Beijing', lat:39.9042, lon:116.4074}
+      ],
+      "India": [
+        {id:'delhi', name:'Delhi', lat:28.7041, lon:77.1025},
+        {id:'mumbai', name:'Mumbai', lat:19.0760, lon:72.8777}
+      ],
+      "South Korea": [
+        {id:'seoul', name:'Seoul', lat:37.5665, lon:126.9780},
+        {id:'busan', name:'Busan', lat:35.1796, lon:129.0756}
+      ],
+      "Brazil": [
+        {id:'sp', name:'São Paulo', lat:-23.5505, lon:-46.6333},
+        {id:'rio', name:'Rio de Janeiro', lat:-22.9068, lon:-43.1729}
+      ],
+      "Australia": [
+        {id:'syd', name:'Sydney', lat:-33.8688, lon:151.2093},
+        {id:'mel', name:'Melbourne', lat:-37.8136, lon:144.9631}
+      ],
+      "Canada": [
+        {id:'tor', name:'Toronto', lat:43.6532, lon:-79.3832},
+        {id:'van', name:'Vancouver', lat:49.2827, lon:-123.1207}
+      ]
+    };
+
+    // --- Config
+    const OPEN_METEO = (lat,lon) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,windspeed_10m,snowfall&timezone=auto`;
+
+    // --- Elements
+    const el = id => document.getElementById(id);
+    const countrySelect = el('countrySelect');
+    const citySelect = el('citySelect');
+    const routeInput = el('routeInput');
+    const predictBtn = el('predictBtn');
+    const demoBtn = el('demoBtn');
+    const clearBtn = el('clearBtn');
+    const predDate = el('predDate');
+    const predLabel = el('predLabel');
+    const levelBadge = el('levelBadge');
+    const scoreEl = el('score');
+    const confEl = el('confidence');
+    const explainEl = el('explain');
+    const weatherSummary = el('weatherSummary');
+    const rawCong = el('rawCong');
+    const rawTime = el('rawTime');
+    const historyEl = el('history');
+    const clockEl = el('clock');
+    const mapCity = document.getElementById('mapCity');
+
+    // --- State
+    let history = JSON.parse(localStorage.getItem('mt_history')||'[]');
+
+    // --- Init UI
+    function populateCountries(){
+      countrySelect.innerHTML = '';
+      Object.keys(CITY_DB).sort().forEach(country=>{
+        const opt = document.createElement('option'); opt.value = country; opt.innerText = country; countrySelect.appendChild(opt);
+      });
     }
-  }
-
-  // Populate cities for selected country
-  function populateCities(){
-    const country = countrySelect.value || countrySelect.options[0]?.value;
-    citySelect.innerHTML = '';
-    const list = (CITY_DB[country] || []);
-    if(list.length === 0){
-      const opt = document.createElement('option'); opt.value='-'; opt.innerText = 'No cities available'; citySelect.appendChild(opt); return;
+    function populateCities(country){
+      citySelect.innerHTML = '';
+      const list = CITY_DB[country] || [];
+      list.forEach(c=>{ const opt = document.createElement('option'); opt.value = c.id; opt.innerText = c.name; citySelect.appendChild(opt); });
     }
-    for(const ct of list){
-      const opt = document.createElement('option');
-      opt.value = ct.id;
-      opt.innerText = ct.name;
-      citySelect.appendChild(opt);
-    }
-  }
 
-  // Ensure we initialize only after DOM content loaded
-  function initOnce(){
     populateCountries();
-    // if no country selected, pick first
-    if(!countrySelect.value && countrySelect.options.length>0) countrySelect.value = countrySelect.options[0].value;
-    populateCities();
-  }
+    populateCities(countrySelect.value || Object.keys(CITY_DB)[0]);
+    countrySelect.addEventListener('change', ()=>{ populateCities(countrySelect.value); updateMapCity(); });
+    citySelect.addEventListener('change', updateMapCity);
 
-  // Wire events with debounce to avoid double calls
-  let t=null;
-  countrySelect.addEventListener('change', ()=>{ clearTimeout(t); t=setTimeout(populateCities,50); });
-  citySelect.addEventListener('change', ()=>{ /* optional: place hook if needed */ });
+    function updateMapCity(){ const country = countrySelect.value; const cid = citySelect.value; const city = (CITY_DB[country]||[]).find(c=>c.id===cid); mapCity.innerText = city?`${city.name} — ${country}`:'City preview'; }
 
-  // In case the script loads before DOM (rare), wait for DOMContentLoaded
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', initOnce);
-  } else {
-    initOnce();
-  }
+    // --- Helpers
+    function updateClock(){ const d=new Date(); clockEl.innerText = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+    setInterval(updateClock,1000); updateClock();
 
-  // expose functions for debugging in console
-  window.__mt_populateCountries = populateCountries;
-  window.__mt_populateCities = populateCities;
-})();
-</script>
+    function setPredDate(){ const t = new Date(Date.now()+24*60*60*1000); predDate.innerText = t.toLocaleDateString(); }
+    setPredDate();
+
+    function colorifyBadge(label){ levelBadge.className = 'badge'; if(label==='Low'){ levelBadge.classList.add('low'); levelBadge.innerText='Low'; } else if(label==='Medium'){ levelBadge.classList.add('med'); levelBadge.innerText='Medium'; } else { levelBadge.classList.add('high'); levelBadge.innerText='High'; } }
+
+    function pushHistory(entry){ history.unshift(entry); history = history.slice(0,8); localStorage.setItem('mt_history', JSON.stringify(history)); renderHistory(); }
+    function renderHistory(){ historyEl.innerHTML = ''; if(history.length===0){ historyEl.innerHTML = '<div class="item">No history yet</div>'; return; } history.forEach(h=>{ const div = document.createElement('div'); div.className='item'; div.innerText = `${h.time} — ${h.country}/${h.place} — ${h.route||'-'} — ${h.label} (${h.score}/10) — ${h.conf}%`; historyEl.appendChild(div); }); }
+    renderHistory();
+
+    async function fetchWeatherFor(lat,lon){ try{ const res = await fetch(OPEN_METEO(lat,lon)); if(!res.ok) throw new Error('weather failed'); const data = await res.json(); const tomorrow = new Date(Date.now()+24*60*60*1000).toISOString().slice(0,10); const times = data.hourly.time; const temps = data.hourly.temperature_2m; const prec = data.hourly.precipitation; const snow = data.hourly.snowfall||new Array(prec.length).fill(0); const wind = data.hourly.windspeed_10m; const idxs=[]; for(let i=0;i<times.length;i++){ if(times[i].startsWith(tomorrow)){ const h = parseInt(times[i].slice(11,13)); if([7,8,9].includes(h)) idxs.push(i); } } if(idxs.length===0) return null; const avgTemp = idxs.reduce((s,i)=>s+temps[i],0)/idxs.length; const totalPrec = idxs.reduce((s,i)=>s+prec[i],0); const totalSnow = idxs.reduce((s,i)=>s+snow[i],0); const avgWind = idxs.reduce((s,i)=>s+wind[i],0)/idxs.length; return {temp:avgTemp, precipitation:totalPrec, snowfall:totalSnow, windspeed:avgWind}; }catch(e){ console.warn('weather',e); return null } }
+
+    function computeConfidence(baseScore, weather){ let conf = 65 + (10 - Math.abs(baseScore-5))*3; if(weather){ if(weather.precipitation>1) conf -= 12; if(weather.snowfall>0.1) conf -= 18; } conf = Math.max(30, Math.min(98, Math.round(conf))); return conf; }
+    function scoreToLabel(score){ if(score<3.5) return 'Low'; if(score>=6.5) return 'High'; return 'Medium'; }
+    function formatTime(d){ return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    // --- Main predict function (rule-hybrid, now global)
+    async function predict(useDemo=false){ predictBtn.disabled=true; predictBtn.innerText='Predicting...';
+      try{
+        const country = countrySelect.value; const cityId = citySelect.value; const cityObj = (CITY_DB[country]||[]).find(c=>c.id===cityId);
+        let weather = null; if(!useDemo && cityObj) weather = await fetchWeatherFor(cityObj.lat, cityObj.lon);
+        if(!weather) weather = {precipitation:0, snowfall:0, temp:0, windspeed:0};
+        // raw congestion (placeholder) — when proxy added, replace with real fetch
+        const raw = useDemo ? (3 + Math.random()*5) : (3 + Math.random()*5);
+        rawCong.innerText = raw.toFixed(1); rawTime.innerText = formatTime(new Date());
+
+        // base scoring modified by region characteristics
+        let base = raw;
+        // region biases (very small)
+        const regionBias = {'United States':0.5,'China':0.6,'India':0.7,'Russia':0.4,'Japan':0.3}[country]||0;
+        base += regionBias;
+        if(weather.precipitation>0.5) base += 1.2; if(weather.precipitation>2) base += 1.6; if(weather.snowfall>0.1) base += 2.2; if(weather.windspeed>15) base += 0.7;
+        const route = routeInput.value.trim(); if(route) base += Math.min(1.5, route.length>2?1:0.3);
+        base = Math.max(0, Math.min(10, base));
+
+        const label = scoreToLabel(base); const conf = computeConfidence(base, weather);
+        predLabel.innerText = label==='Low' ? 'Light congestion expected' : label==='Medium' ? 'Moderate congestion expected' : 'Heavy congestion expected';
+        scoreEl.innerText = Math.round(base*10)/10; confEl.innerText = conf; colorifyBadge(label);
+
+        explainEl.innerText = `Base raw congestion ${raw.toFixed(1)} · precip ${weather.precipitation.toFixed(2)} mm · snow ${weather.snowfall.toFixed(2)} mm · wind ${weather.windspeed.toFixed(1)} m/s`;
+
+        // map / city preview text
+        mapCity.innerText = cityObj? `${cityObj.name} — ${country}` : 'City preview';
+
+        // push history
+        const entry = {time:formatTime(new Date()),country:country,place:cityObj?cityObj.name:'-',route:route,label:label,score:Math.round(base*10)/10,conf:conf};
+        pushHistory(entry);
+      }catch(e){ console.error(e); alert('Prediction failed — check console'); }
+      finally{ predictBtn.disabled=false; predictBtn.innerText='Predict Morning Rush'; }
+    }
+
+    // --- Events
+    predictBtn.addEventListener('click',()=>predict(false)); demoBtn.addEventListener('click',()=>predict(true)); clearBtn.addEventListener('click',()=>{ localStorage.removeItem('mt_history'); history=[]; renderHistory(); });
+
+    // theme switch
+    const themeSwitch = el('themeSwitch'); let darkOn=true; function setTheme(on){ darkOn=on; if(on){ document.body.style.background='linear-gradient(180deg,#041028 0%,#071022 60%)'; themeSwitch.classList.add('on'); } else { document.body.style.background='#eef1f4'; themeSwitch.classList.remove('on'); } }
+    themeSwitch.addEventListener('click',()=>{ setTheme(!darkOn); }); setTheme(true);
+
+    // initialize city display
+    updateMapCity();
+  </script>
+</body>
+</html>
