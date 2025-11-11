@@ -160,8 +160,6 @@
     });
 
     // Init
-    (function init(){ populateCountrySelect(); apiDoc.innerText = [ 'listCountries() → array', 'getCountry(name) → country object', 'getRegions(country) → array', 'getCities(country, region?) → array of cities', 'nearestCity(lat,lon,countryHint?) → nearest city with distance_km', "findCityByName(query) → exact or fuzzy match" ].join('
-'); })();
-  </script>
+    (function init(){ populateCountrySelect(); apiDoc.innerText = [ 'listCountries() → array', 'getCountry(name) → country object', 'getRegions(country) → array', 'getCities(country, region?) → array of cities', 'nearestCity(lat,lon,countryHint?) → nearest city with distance_km', "findCityByName(query) → exact or fuzzy match" ].join('\\n')  </script>
 </body>
 </html>
