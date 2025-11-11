@@ -1,87 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Global Traffic Predictor</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #0d0d0d;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      min-height: 100vh;
-    }
-    .container {
-      width: 95%;
-      max-width: 1100px;
-      padding: 20px;
-    }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-    .card {
-      background: #1a1a1a;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 12px rgba(255,255,255,0.05);
-      margin-bottom: 20px;
-    }
-    label { display:block; margin-top:10px; font-weight:bold; }
-    select, input {
-      width: 100%;
-      padding: 10px;
-      margin-top: 5px;
-      border-radius: 6px;
-      border: none;
-      background: #2a2a2a;
-      color: white;
-    }
-    button {
-      margin-top: 15px;
-      padding: 12px;
-      width: 100%;
-      border: none;
-      border-radius: 8px;
-      background: #3a3aff;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    button:hover { opacity: 0.85; }
-    .result-box { margin-top:20px; }
-    .score { font-size:42px; font-weight:bold; }
-    .badge { display:inline-block; padding:6px 10px; border-radius:6px; margin-top:10px; }
-    .badge.low { background:#2ecc71; }
-    .badge.med { background:#f1c40f; }
-    .badge.high { background:#e74c3c; }
-  </style>
-</head>
-<body>
-<div class="container">
-  <h1>🌍 Global Morning Traffic Predictor</h1>
+<script>
+// Robust dropdown wiring: safe to run even if elements load slowly or are missing.
+(function(){
+  // Guard: ensure CITY_DB exists
+  if(typeof CITY_DB === 'undefined'){ console.warn('CITY_DB missing'); window.CITY_DB = {}; return; }
 
-  <div class="card">
-    <label>Country</label>
-    <select id="countrySelect"></select>
+  const countrySelect = document.getElementById('countrySelect');
+  const citySelect = document.getElementById('citySelect');
 
-    <label>City</label>
-    <select id="citySelect"></select>
+  if(!countrySelect || !citySelect){
+    console.error('Dropdown elements missing: countrySelect or citySelect not found in DOM.');
+    return;
+  }
 
-    <label>Route (optional)</label>
-    <input id="routeInput" placeholder="ex: Garden Ring → Red Square" />
+  // Populate countries sorted
+  function populateCountries(){
+    countrySelect.innerHTML = '';
+    const countries = Object.keys(CITY_DB).sort();
+    for(const c of countries){
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.innerText = c;
+      countrySelect.appendChild(opt);
+    }
+  }
 
-    <button id="predictBtn">Predict Morning Rush</button>
-    <button id="demoBtn" style="background:#444">Run Demo Mode</button>
-  </div>
+  // Populate cities for selected country
+  function populateCities(){
+    const country = countrySelect.value || countrySelect.options[0]?.value;
+    citySelect.innerHTML = '';
+    const list = (CITY_DB[country] || []);
+    if(list.length === 0){
+      const opt = document.createElement('option'); opt.value='-'; opt.innerText = 'No cities available'; citySelect.appendChild(opt); return;
+    }
+    for(const ct of list){
+      const opt = document.createElement('option');
+      opt.value = ct.id;
+      opt.innerText = ct.name;
+      citySelect.appendChild(opt);
+    }
+  }
 
-  <div class="card result-box">
-    <div id="predLabel" style="font-size:20px; margin-bottom:10px;">Prediction will appear here</div>
-    <div class="score" id="scoreEl">--</div>
-    <div class="badge" id="badgeBox">
+  // Ensure we initialize only after DOM content loaded
+  function initOnce(){
+    populateCountries();
+    // if no country selected, pick first
+    if(!countrySelect.value && countrySelect.options.length>0) countrySelect.value = countrySelect.options[0].value;
+    populateCities();
+  }
+
+  // Wire events with debounce to avoid double calls
+  let t=null;
+  countrySelect.addEventListener('change', ()=>{ clearTimeout(t); t=setTimeout(populateCities,50); });
+  citySelect.addEventListener('change', ()=>{ /* optional: place hook if needed */ });
+
+  // In case the script loads before DOM (rare), wait for DOMContentLoaded
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initOnce);
+  } else {
+    initOnce();
+  }
+
+  // expose functions for debugging in console
+  window.__mt_populateCountries = populateCountries;
+  window.__mt_populateCities = populateCities;
+})();
+</script>
