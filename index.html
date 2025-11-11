@@ -1,134 +1,176 @@
+
 <!doctype html>
-<!--
-Moscow Morning Traffic Predictor — Single-file web app
-Drop this file on GitHub Pages / Netlify / Vercel or open locally (preferably served by a local static server).
-
-How it works:
-- Tries to fetch current Yandex congestion (0-10). If blocked by CORS, the app will fall back to a demo data set.
-- Fetches weather forecast from Open-Meteo for Moscow (lat 55.7558, lon 37.6176).
-- Uses a simple rule-based model (runnable fully in-browser) to predict morning rush congestion for 7-10 AM as Low / Medium / High and a numeric score (0-10).
-
-CORS note: Many public traffic endpoints block cross-origin requests from static pages. If the Yandex endpoint is blocked in your browser, either:
-  • Serve this file from a small server / Netlify / Vercel (some endpoints still block), OR
-  • Use a public CORS proxy (for testing) by enabling `USE_CORS_PROXY` in the code and setting PROXY_PREFIX to a proxy URL, OR
-  • Replace the traffic fetch with your own backend that proxies the requests.
-
-This file is intentionally self-contained and beginner-friendly.
--->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Moscow Morning Traffic Predictor</title>
+  <title>Moscow Morning Traffic — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa7b2;--accent:#f97316;--good:#16a34a;--bad:#ef4444}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    body{background:linear-gradient(180deg,#071023 0%, #0b1220 60%);color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:32px}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:22px;max-width:760px;width:100%;box-shadow:0 6px 30px rgba(2,6,23,0.7)}
-    h1{margin:0 0 6px;font-size:20px}
-    p.lead{margin:0 0 18px;color:var(--muted)}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    .panel{background:rgba(255,255,255,0.02);padding:12px;border-radius:8px;flex:1;min-width:220px}
-    .big{font-size:40px;font-weight:700;margin:6px 0}
+    :root{--bg:#0b1220;--panel:#071022;--muted:#9aa7b2;--accent:#ff7a18;--glass:rgba(255,255,255,0.04);--good:#16a34a;--bad:#ef4444}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#030417 0%,#071022 60%);color:#e6eef6;display:flex;align-items:flex-start;justify-content:center;padding:36px}
+    .container{width:100%;max-width:1100px}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#ffb37a);display:flex;align-items:center;justify-content:center;color:#081023;font-weight:800;font-size:20px}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:0;color:var(--muted)}
+
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:22px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:18px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+
+    .panel-title{font-weight:700;margin-bottom:8px}
     .small{color:var(--muted);font-size:13px}
-    button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:white;font-weight:600;cursor:pointer}
-    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06)}
-    .meta{font-size:13px;color:var(--muted);margin-top:8px}
-    .reason{margin-top:10px;color:var(--muted);font-size:13px}
-    .footer{margin-top:18px;color:var(--muted);font-size:13px}
-    .badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.03);font-weight:600}
+
+    /* Predictor card */
+    .predictor{display:flex;flex-direction:column;gap:14px}
+    .big-score{font-size:42px;font-weight:800}
+    .score-pill{display:inline-block;padding:8px 12px;border-radius:999px;background:var(--glass);font-weight:700}
+
+    .controls{display:flex;gap:10px;align-items:center}
+    .btn{background:var(--accent);border:none;padding:10px 14px;border-radius:10px;color:#071022;font-weight:700;cursor:pointer}
+    .btn.secondary{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
+
+    .meta{font-size:13px;color:var(--muted)}
+
+    .rightcol{display:flex;flex-direction:column;gap:12px}
+    .stat{display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px}
+    .stat .num{font-weight:800;font-size:18px}
+
+    .reasons{font-size:14px;color:var(--muted);line-height:1.4}
+
+    .footer{margin-top:16px;color:var(--muted);font-size:13px}
+
+    /* responsive */
+    @media (max-width:880px){.grid{grid-template-columns:1fr;}.rightcol{order:2}}
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Moscow Morning Traffic Predictor</h1>
-    <p class="lead">Predicts expected congestion for tomorrow's morning rush (7–10 AM) using current traffic + weather. Runs entirely in your browser.</p>
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <div class="logo">MT</div>
+        <div>
+          <h1>Moscow Morning Traffic</h1>
+          <p class="lead">Simple, live prediction for tomorrow's morning rush (7–10 AM). Runs fully in your browser.</p>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="small">Deployed: <span id="deployedUrl">—</span></div>
+        <div class="small">Model: <span class="score-pill">Rule-hybrid (browser)</span></div>
+      </div>
+    </div>
 
-    <div class="row">
-      <div class="panel">
-        <div class="small">City</div>
-        <div class="big">Moscow</div>
-        <div class="small">Prediction for: <span id="pred-date">—</span></div>
-        <div class="small meta">Model: rule-based hybrid (in-browser). No server required.</div>
+    <div class="grid">
+      <div class="card">
+        <div class="predictor">
+          <div>
+            <div class="panel-title">Prediction</div>
+            <div class="big-score" id="prediction">—</div>
+            <div class="small meta">Score: <span id="score">—</span> &nbsp; • &nbsp; Confidence: <span id="conf">—</span></div>
+          </div>
+
+          <div>
+            <div class="panel-title">Quick controls</div>
+            <div class="controls">
+              <button class="btn" id="refreshBtn">Refresh Now</button>
+              <button class="btn secondary" id="demoBtn">Use Demo Data</button>
+              <button class="btn secondary" id="explainBtn">Explain Prediction</button>
+            </div>
+            <div class="small" style="margin-top:8px">Tip: If live traffic fetch is blocked by CORS, use demo data or deploy with a small proxy (I can add one).</div>
+          </div>
+
+          <div>
+            <div class="panel-title">Current Traffic</div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="flex:1">
+                <div class="small">Congestion (0–10)</div>
+                <div style="font-weight:800;font-size:20px" id="current-cong">—</div>
+                <div class="small" id="cong-source">source: —</div>
+              </div>
+
+              <div style="width:140px">
+                <div class="small">Tomorrow</div>
+                <div style="font-weight:700" id="pred-date">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:6px" class="reasons" id="reasons">Reasons: —</div>
+        </div>
       </div>
 
-      <div class="panel" style="flex:0 0 240px">
-        <div class="small">Current congestion (0–10)</div>
-        <div id="current-cong" class="big">—</div>
-        <div class="small meta" id="cong-source">source: —</div>
-        <div style="margin-top:8px">
-          <button id="refreshBtn">Refresh now</button>
-          <button id="demoBtn" class="secondary">Use demo data</button>
+      <div class="rightcol">
+        <div class="card stat">
+          <div>
+            <div class="small">Weather (7–10 AM)</div>
+            <div id="weatherSummary">—</div>
+          </div>
+          <div class="num" id="weatherIcon">🌤️</div>
+        </div>
+
+        <div class="card stat">
+          <div>
+            <div class="small">Raw congestion</div>
+            <div class="num" id="rawCong">—</div>
+            <div class="small" id="rawTime">—</div>
+          </div>
+        </div>
+
+        <div class="card stat">
+          <div>
+            <div class="small">Confidence</div>
+            <div class="num" id="confNum">—</div>
+            <div class="small">Model heuristic</div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:12px;font-size:13px;color:var(--muted)">
+          <div style="font-weight:700;margin-bottom:8px">About</div>
+          <div>This dashboard predicts Moscow morning congestion (7–10 AM) using live traffic & weather. It's a browser-first demo — no server required. Want permanent logging, higher accuracy, or a CORS proxy? I can add that.</div>
         </div>
       </div>
     </div>
 
-    <div style="height:14px"></div>
-
-    <div class="row">
-      <div class="panel">
-        <div class="small">Predicted Morning Rush (7–10 AM)</div>
-        <div id="prediction" class="big">—</div>
-        <div class="small meta">Score: <span id="score">—</span> &nbsp; • &nbsp; Confidence: <span id="conf">—</span></div>
-        <div class="reason" id="reasons">Reasons: —</div>
-      </div>
-
-      <div class="panel">
-        <div class="small">Weather snapshot (tomorrow 7–10AM)</div>
-        <div id="weatherSummary" class="big">—</div>
-        <div class="small meta" id="weatherDetails">—</div>
-      </div>
-    </div>
-
-    <div class="footer">Tip: If live traffic fetch is blocked by CORS, click <b>Use demo data</b> or host this file on Netlify / Vercel. See comments inside the HTML for CORS proxy tips.</div>
+    <div class="footer">Deployed to Vercel? Refresh the site to confirm the live data. If data is blocked, click "Use Demo Data". When you're ready I can add a proxy or charting.</div>
   </div>
 
   <script>
-    // -------- CONFIG --------
+    // --- copy of the earlier logic adapted to the new UI ---
     const MOSCOW = {lat:55.7558, lon:37.6176};
     const YANDEX_TRAFFIC_URL = 'https://yandex.com/maps-api/traffic/get/?city=moscow';
     const OPEN_METEO_URL = (lat,lon) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,windspeed_10m,snowfall,cloudcover&timezone=Europe%2FMoscow`;
+    const USE_CORS_PROXY = false;
+    const PROXY_PREFIX = 'https://api.allorigins.win/raw?url=';
 
-    // Toggle this true if you're testing with a public CORS proxy (for quick testing):
-    const USE_CORS_PROXY = false; // set true if Yandex blocked and you have a proxy
-    // Example proxies (testing only): 'https://api.allorigins.win/raw?url='  OR 'https://cors.bridged.cc/'
-    const PROXY_PREFIX = 'https://api.allorigins.win/raw?url='; // only use for testing
-
-    // -------- UI --------
     const el = id => document.getElementById(id);
     const today = new Date();
     const tomorrow = new Date(today.getTime() + 24*60*60*1000);
     el('pred-date').innerText = tomorrow.toLocaleDateString();
 
-    // -------- Demo fallback data --------
     const DEMO_TRAFFIC = {congestion: 6.2, timestamp: new Date().toISOString()};
     const DEMO_WEATHER = {precipitation: 0.2, snowfall:0, temp: -1, windspeed: 8, summary: 'light rain expected at 8 AM'};
 
-    // -------- Fetch helpers --------
     async function fetchYandexTraffic(){
       try{
         const url = USE_CORS_PROXY ? PROXY_PREFIX + encodeURIComponent(YANDEX_TRAFFIC_URL) : YANDEX_TRAFFIC_URL;
         const r = await fetch(url);
         if(!r.ok) throw new Error('Yandex fetch failed: '+r.status);
         const data = await r.json();
-        // NOTE: Yandex public JSON shape varies — try to extract common fields.
-        // Attempt common patterns, then fallback to demo.
         if(Array.isArray(data) && data.length>0){
-          // Sometimes traffic endpoint returns objects; look for 'level' or 'congestion'
           const sample = data[0];
           const maybeLevel = sample.level || sample.congestion || sample.traffic_level || sample.value;
           if(typeof maybeLevel === 'number') return {congestion: maybeLevel, raw: sample};
         }
-        // Other shapes: object with 'result' etc.
         if(data && typeof data === 'object'){
           const maybeLevel = data.level || data.congestion || data.traffic_level || data.value || data.result;
           if(typeof maybeLevel === 'number') return {congestion: maybeLevel, raw:data};
         }
-        // If nothing matched, attempt parsing for 'congestion' property by scanning
         const flat = JSON.stringify(data);
         const m = flat.match(/"congestion"\s*:\s*(\d+(?:\.\d+)?)/i);
-        if(m) return {congestion: parseFloat(m[1]), raw:data};
-
+        if(m) return {congestion: parseFloat(m[1]), raw: data};
         throw new Error('Unexpected Yandex shape');
       }catch(err){
         console.warn('Yandex traffic fetch failed or blocked:', err);
@@ -142,15 +184,12 @@ This file is intentionally self-contained and beginner-friendly.
         const r = await fetch(url);
         if(!r.ok) throw new Error('Weather fetch failed: '+r.status);
         const data = await r.json();
-        // pick hours 7,8,9 Moscow time for tomorrow
         const tomorrowDateStr = new Date(Date.now()+24*60*60*1000).toISOString().slice(0,10);
         const times = data.hourly.time;
         const temps = data.hourly.temperature_2m;
         const prec = data.hourly.precipitation;
         const snow = data.hourly.snowfall || new Array(prec.length).fill(0);
         const wind = data.hourly.windspeed_10m;
-
-        // find indices for tomorrow 07:00,08:00,09:00 in Europe/Moscow timezone labels
         const idxs = [];
         for(let i=0;i<times.length;i++){
           if(times[i].startsWith(tomorrowDateStr)){
@@ -170,54 +209,36 @@ This file is intentionally self-contained and beginner-friendly.
       }
     }
 
-    // -------- Prediction logic (rule-based) --------
     function predictMorning(congestion, weather, meta={}){
-      // Normalize congestion to 0-10 scale if needed
       let base = Number(congestion);
       if(Number.isNaN(base)) base = 5;
-
-      // Add weather penalties
       if(weather){
-        if(weather.precipitation > 0.5) base += 1.3; // moderate rain
-        if(weather.precipitation > 2.0) base += 1.5; // heavy rain
-        if(weather.snowfall > 0.1) base += 2.0; // snow is worse
-        if(weather.windspeed > 20) base += 0.6; // strong wind
+        if(weather.precipitation > 0.5) base += 1.3;
+        if(weather.precipitation > 2.0) base += 1.5;
+        if(weather.snowfall > 0.1) base += 2.0;
+        if(weather.windspeed > 20) base += 0.6;
       }
-
-      // Day of week effects
-      const dow = new Date().getDay(); // 0 Sun .. 6 Sat — note we consider tomorrow
+      const dow = new Date().getDay();
       const tomorrowDow = (dow + 1) % 7;
-      // weekdays (Mon-Fri) heavier
       if([1,2,3,4,5].includes(tomorrowDow)) base += 1.0;
-      // small holiday adjustment (placeholder - no holiday API included)
-      // Confidence heuristics
-      let conf = 0.6; // base confidence
-      if(weather) conf += 0.15; // with weather, better
+      let conf = 0.6;
+      if(weather) conf += 0.15;
       if(typeof meta.recentStd === 'number' && meta.recentStd < 1.5) conf += 0.1;
-
-      // clamp
       if(base < 0) base = 0;
       if(base > 10) base = 10;
-
-      // Map to Low/Medium/High using thresholds
       let label = 'Medium';
       if(base < 3.5) label = 'Low';
       else if(base >= 6.5) label = 'High';
-
-      // Confidence mapping
       let confLabel = Math.round(Math.min(0.99, conf)*100);
-
       return {label, score: Math.round(base*10)/10, confidence: confLabel};
     }
 
-    // -------- Main flow --------
     async function runPrediction(useDemo=false){
       el('prediction').innerText = 'Calculating...';
       el('score').innerText = '—';
       el('conf').innerText = '—';
       el('reasons').innerText = 'Fetching data...';
 
-      // traffic
       let traffic = null;
       if(!useDemo){
         traffic = await fetchYandexTraffic();
@@ -229,27 +250,26 @@ This file is intentionally self-contained and beginner-friendly.
         el('cong-source').innerText = 'source: Yandex traffic (live)';
       }
       el('current-cong').innerText = traffic.congestion.toFixed(1);
+      el('rawCong').innerText = traffic.congestion.toFixed(1);
+      el('rawTime').innerText = new Date(traffic.timestamp||Date.now()).toLocaleString();
 
-      // weather
       const weather = await fetchWeather();
       let weatherSummary = '—';
       if(weather){
-        weatherSummary = `${weather.temp.toFixed(1)}°C · precip ${weather.precipitation.toFixed(2)}mm · wind ${weather.windspeed.toFixed(1)} m/s`;
-        el('weatherDetails').innerText = `Temp: ${weather.temp.toFixed(1)}°C • Precip: ${weather.precipitation.toFixed(2)} mm • Snow: ${weather.snowfall.toFixed(2)} mm • Wind: ${weather.windspeed.toFixed(1)} m/s`;
+        weatherSummary = `${weather.temp.toFixed(1)}°C · precip ${weather.precipitation.toFixed(2)} mm · wind ${weather.windspeed.toFixed(1)} m/s`;
+        el('weatherDetails')?.innerText = `Temp: ${weather.temp.toFixed(1)}°C • Precip: ${weather.precipitation.toFixed(2)} mm • Snow: ${weather.snowfall.toFixed(2)} mm • Wind: ${weather.windspeed.toFixed(1)} m/s`;
       } else {
-        el('weatherDetails').innerText = 'Weather fetch failed — using demo assumptions.';
+        el('weatherDetails')?.innerText = 'Weather fetch failed — using demo assumptions.';
       }
       el('weatherSummary').innerText = weatherSummary;
 
-      // simple meta (e.g., variability) — not computed from real historic series here
       const meta = {recentStd:1.2};
-
       const pred = predictMorning(traffic.congestion, weather||DEMO_WEATHER, meta);
       el('prediction').innerText = pred.label;
       el('score').innerText = `${pred.score} / 10`;
       el('conf').innerText = `${pred.confidence}%`;
+      el('confNum').innerText = `${pred.confidence}%`;
 
-      // reasons
       const r = [];
       r.push(`Base congestion: ${traffic.congestion.toFixed(1)} (0–10)`);
       if(weather){
@@ -261,15 +281,15 @@ This file is intentionally self-contained and beginner-friendly.
       }
       const tomorrowDow = (new Date().getDay() + 1) % 7;
       if([1,2,3,4,5].includes(tomorrowDow)) r.push('Tomorrow is a weekday — increases congestion');
-
       el('reasons').innerText = r.join(' • ');
     }
 
-    // -------- UI hooks --------
     document.getElementById('refreshBtn').addEventListener('click', ()=>runPrediction(false));
     document.getElementById('demoBtn').addEventListener('click', ()=>runPrediction(true));
+    document.getElementById('explainBtn').addEventListener('click', ()=>alert(document.getElementById('reasons').innerText));
 
-    // Run once on load
+    // show deployed url if available
+    try{ el('deployedUrl').innerText = location.hostname; }catch(e){}
     runPrediction(false);
   </script>
 </body>
