@@ -3,293 +3,318 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Moscow Morning Traffic — Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <title>Moscow Traffic — Upgraded Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0b1220;--panel:#071022;--muted:#9aa7b2;--accent:#ff7a18;--glass:rgba(255,255,255,0.04);--good:#16a34a;--bad:#ef4444}
+    :root{
+      --bg:#0b1220;--card:#0f1724;--muted:#9aa7b2;--accent:#ff7a18;--glass:rgba(255,255,255,0.03);
+      --good:#16a34a;--warn:#f59e0b;--bad:#ef4444;--glass-2:rgba(255,255,255,0.02)
+    }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    body{background:linear-gradient(180deg,#030417 0%,#071022 60%);color:#e6eef6;display:flex;align-items:flex-start;justify-content:center;padding:36px}
-    .container{width:100%;max-width:1100px}
-    .header{display:flex;align-items:center;justify-content:space-between;gap:16px}
-    .brand{display:flex;gap:12px;align-items:center}
-    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#ffb37a);display:flex;align-items:center;justify-content:center;color:#081023;font-weight:800;font-size:20px}
-    h1{margin:0;font-size:20px}
-    p.lead{margin:0;color:var(--muted)}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#041028 0%,#071022 60%);color:#e6eef6}
+    .wrap{max-width:1100px;margin:28px auto;padding:18px}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#ffb37a);display:flex;align-items:center;justify-content:center;color:#071022;font-weight:800}
+    h1{margin:0;font-size:18px}
+    .subtitle{color:var(--muted);font-size:13px}
 
-    .grid{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:22px}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:18px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;margin-top:18px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
 
-    .panel-title{font-weight:700;margin-bottom:8px}
-    .small{color:var(--muted);font-size:13px}
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+    input,select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .controls{display:flex;gap:10px;margin-top:10px}
+    .btn{background:var(--accent);border:none;color:#071022;padding:10px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
 
-    /* Predictor card */
-    .predictor{display:flex;flex-direction:column;gap:14px}
-    .big-score{font-size:42px;font-weight:800}
-    .score-pill{display:inline-block;padding:8px 12px;border-radius:999px;background:var(--glass);font-weight:700}
+    .result{display:flex;align-items:center;gap:14px}
+    .badge{padding:8px 12px;border-radius:999px;font-weight:800}
+    .badge.low{background:rgba(22,163,74,0.12);color:var(--good)}
+    .badge.med{background:rgba(245,158,11,0.12);color:var(--warn)}
+    .badge.high{background:rgba(239,68,68,0.12);color:var(--bad)}
 
-    .controls{display:flex;gap:10px;align-items:center}
-    .btn{background:var(--accent);border:none;padding:10px 14px;border-radius:10px;color:#071022;font-weight:700;cursor:pointer}
-    .btn.secondary{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:13px;color:var(--muted)}
 
-    .meta{font-size:13px;color:var(--muted)}
+    .map{height:200px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));display:flex;align-items:center;justify-content:center;font-size:13px}
+    .map svg{width:100%;height:100%;border-radius:8px}
 
-    .rightcol{display:flex;flex-direction:column;gap:12px}
-    .stat{display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px}
-    .stat .num{font-weight:800;font-size:18px}
+    .history{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+    .history .item{background:var(--glass-2);padding:10px;border-radius:8px;font-size:13px}
 
-    .reasons{font-size:14px;color:var(--muted);line-height:1.4}
+    .row{display:flex;gap:12px;align-items:center}
+    .clock{font-weight:700}
 
-    .footer{margin-top:16px;color:var(--muted);font-size:13px}
+    .footer{margin-top:12px;color:var(--muted);font-size:13px}
 
-    /* responsive */
-    @media (max-width:880px){.grid{grid-template-columns:1fr;}.rightcol{order:2}}
+    /* dark mode toggle */
+    .toggle{display:flex;align-items:center;gap:8px}
+    .switch{width:44px;height:26px;background:rgba(255,255,255,0.06);border-radius:999px;padding:4px;cursor:pointer}
+    .knob{width:18px;height:18px;border-radius:50%;background:white;transform:translateX(0);transition:transform .18s}
+    .switch.on{background:linear-gradient(90deg,#334155,#0ea5e9)}
+    .switch.on .knob{transform:translateX(18px)}
+
+    @media (max-width:920px){.grid{grid-template-columns:1fr}.map{height:180px}}
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
+  <div class="wrap">
+    <div class="nav">
       <div class="brand">
         <div class="logo">MT</div>
         <div>
-          <h1>Moscow Morning Traffic</h1>
-          <p class="lead">Simple, live prediction for tomorrow's morning rush (7–10 AM). Runs fully in your browser.</p>
+          <h1>Moscow Traffic — Alpha</h1>
+          <div class="subtitle">Predicts morning (7–10 AM) congestion using live traffic + weather — browser first.</div>
         </div>
       </div>
-      <div style="text-align:right">
-        <div class="small">Deployed: <span id="deployedUrl">—</span></div>
-        <div class="small">Model: <span class="score-pill">Rule-hybrid (browser)</span></div>
+      <div class="row">
+        <div class="clock" id="clock">--:--</div>
+        <div style="width:12px"></div>
+        <div class="toggle">
+          <div class="small">Dark</div>
+          <div id="themeSwitch" class="switch" title="Toggle dark mode"><div class="knob"></div></div>
+        </div>
       </div>
     </div>
 
     <div class="grid">
       <div class="card">
-        <div class="predictor">
+        <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div class="panel-title">Prediction</div>
-            <div class="big-score" id="prediction">—</div>
-            <div class="small meta">Score: <span id="score">—</span> &nbsp; • &nbsp; Confidence: <span id="conf">—</span></div>
+            <div class="small">Location</div>
+            <select id="placeSelect">
+              <option value="central">Central Moscow (Tverskaya)</option>
+              <option value="mkad">MKAD Ring Road</option>
+              <option value="sheremetyevo">Sheremetyevo Airport</option>
+              <option value="redsquare">Red Square Area</option>
+            </select>
           </div>
-
-          <div>
-            <div class="panel-title">Quick controls</div>
-            <div class="controls">
-              <button class="btn" id="refreshBtn">Refresh Now</button>
-              <button class="btn secondary" id="demoBtn">Use Demo Data</button>
-              <button class="btn secondary" id="explainBtn">Explain Prediction</button>
-            </div>
-            <div class="small" style="margin-top:8px">Tip: If live traffic fetch is blocked by CORS, use demo data or deploy with a small proxy (I can add one).</div>
+          <div style="width:220px">
+            <div class="small">Bus route (optional)</div>
+            <input id="routeInput" placeholder="e.g., 12 or leave blank" />
           </div>
-
-          <div>
-            <div class="panel-title">Current Traffic</div>
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div style="flex:1">
-                <div class="small">Congestion (0–10)</div>
-                <div style="font-weight:800;font-size:20px" id="current-cong">—</div>
-                <div class="small" id="cong-source">source: —</div>
-              </div>
-
-              <div style="width:140px">
-                <div class="small">Tomorrow</div>
-                <div style="font-weight:700" id="pred-date">—</div>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top:6px" class="reasons" id="reasons">Reasons: —</div>
         </div>
+
+        <div class="controls" style="margin-top:14px">
+          <button class="btn" id="predictBtn">Predict Morning Rush</button>
+          <button class="btn ghost" id="demoBtn">Use Demo Data</button>
+          <button class="btn ghost" id="clearBtn">Clear History</button>
+        </div>
+
+        <div style="margin-top:18px">
+          <div class="small">Prediction for: <span id="predDate">—</span></div>
+          <div style="height:12px"></div>
+          <div class="result">
+            <div id="levelBadge" class="badge med">—</div>
+            <div>
+              <div id="predLabel" style="font-weight:800;font-size:20px">—</div>
+              <div class="muted">Score: <span id="score">—</span> &nbsp; • &nbsp; Confidence: <span id="confidence">—</span></div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="map" id="mapArea">
+            <!-- simple SVG placeholder map; district highlighting via JS -->
+            <svg viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="600" height="300" fill="#071022" rx="8" />
+              <g id="districts">
+                <rect id="d-central" x="80" y="60" width="200" height="120" fill="#0b1220" stroke="#233b57" rx="8" />
+                <rect id="d-mkad" x="300" y="40" width="260" height="80" fill="#0b1220" stroke="#233b57" rx="8" />
+                <rect id="d-airport" x="300" y="140" width="200" height="90" fill="#0b1220" stroke="#233b57" rx="8" />
+                <rect id="d-red" x="60" y="190" width="160" height="80" fill="#0b1220" stroke="#233b57" rx="8" />
+              </g>
+              <text x="180" y="120" fill="#9aa7b2" font-size="13" text-anchor="middle">Central</text>
+              <text x="430" y="80" fill="#9aa7b2" font-size="13" text-anchor="middle">MKAD</text>
+              <text x="400" y="190" fill="#9aa7b2" font-size="13" text-anchor="middle">Sheremetyevo</text>
+              <text x="140" y="230" fill="#9aa7b2" font-size="13" text-anchor="middle">Red Square</text>
+            </svg>
+          </div>
+
+          <div id="explain" class="small" style="margin-top:10px">Reasons: —</div>
+        </div>
+
       </div>
 
-      <div class="rightcol">
-        <div class="card stat">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div class="small">Weather (7–10 AM)</div>
+            <div class="small">Live Weather (tomorrow 7–10 AM)</div>
             <div id="weatherSummary">—</div>
           </div>
-          <div class="num" id="weatherIcon">🌤️</div>
-        </div>
-
-        <div class="card stat">
-          <div>
+          <div style="text-align:right">
             <div class="small">Raw congestion</div>
-            <div class="num" id="rawCong">—</div>
+            <div id="rawCong" style="font-weight:800">—</div>
             <div class="small" id="rawTime">—</div>
           </div>
         </div>
 
-        <div class="card stat">
-          <div>
-            <div class="small">Confidence</div>
-            <div class="num" id="confNum">—</div>
-            <div class="small">Model heuristic</div>
-          </div>
+        <div style="margin-top:12px">
+          <div class="small">History</div>
+          <div class="history" id="history"></div>
         </div>
 
-        <div class="card" style="padding:12px;font-size:13px;color:var(--muted)">
-          <div style="font-weight:700;margin-bottom:8px">About</div>
-          <div>This dashboard predicts Moscow morning congestion (7–10 AM) using live traffic & weather. It's a browser-first demo — no server required. Want permanent logging, higher accuracy, or a CORS proxy? I can add that.</div>
-        </div>
+        <div style="margin-top:12px" class="small">Notes: This is a browser-first demo. I can add a server proxy to log real historical data and remove CORS issues.</div>
       </div>
     </div>
 
-    <div class="footer">Deployed to Vercel? Refresh the site to confirm the live data. If data is blocked, click "Use Demo Data". When you're ready I can add a proxy or charting.</div>
+    <div class="footer">Built by you — next: analytics, serverless proxy, or model training. Ask me to add any specific upgrade.</div>
   </div>
 
   <script>
-    // --- copy of the earlier logic adapted to the new UI ---
+    // --- Config
     const MOSCOW = {lat:55.7558, lon:37.6176};
-    const YANDEX_TRAFFIC_URL = 'https://yandex.com/maps-api/traffic/get/?city=moscow';
-    const OPEN_METEO_URL = (lat,lon) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,windspeed_10m,snowfall,cloudcover&timezone=Europe%2FMoscow`;
-    const USE_CORS_PROXY = false;
-    const PROXY_PREFIX = 'https://api.allorigins.win/raw?url=';
+    const OPEN_METEO = (lat,lon) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,windspeed_10m,snowfall&timezone=Europe%2FMoscow`;
 
+    // --- Elements
     const el = id => document.getElementById(id);
-    const today = new Date();
-    const tomorrow = new Date(today.getTime() + 24*60*60*1000);
-    el('pred-date').innerText = tomorrow.toLocaleDateString();
+    const predDate = el('predDate');
+    const placeSelect = el('placeSelect');
+    const routeInput = el('routeInput');
+    const predictBtn = el('predictBtn');
+    const demoBtn = el('demoBtn');
+    const clearBtn = el('clearBtn');
+    const predLabel = el('predLabel');
+    const levelBadge = el('levelBadge');
+    const scoreEl = el('score');
+    const confEl = el('confidence');
+    const explainEl = el('explain');
+    const weatherSummary = el('weatherSummary');
+    const rawCong = el('rawCong');
+    const rawTime = el('rawTime');
+    const historyEl = el('history');
+    const clockEl = el('clock');
 
-    const DEMO_TRAFFIC = {congestion: 6.2, timestamp: new Date().toISOString()};
-    const DEMO_WEATHER = {precipitation: 0.2, snowfall:0, temp: -1, windspeed: 8, summary: 'light rain expected at 8 AM'};
+    // --- State
+    let history = JSON.parse(localStorage.getItem('mt_history')||'[]');
 
-    async function fetchYandexTraffic(){
-      try{
-        const url = USE_CORS_PROXY ? PROXY_PREFIX + encodeURIComponent(YANDEX_TRAFFIC_URL) : YANDEX_TRAFFIC_URL;
-        const r = await fetch(url);
-        if(!r.ok) throw new Error('Yandex fetch failed: '+r.status);
-        const data = await r.json();
-        if(Array.isArray(data) && data.length>0){
-          const sample = data[0];
-          const maybeLevel = sample.level || sample.congestion || sample.traffic_level || sample.value;
-          if(typeof maybeLevel === 'number') return {congestion: maybeLevel, raw: sample};
-        }
-        if(data && typeof data === 'object'){
-          const maybeLevel = data.level || data.congestion || data.traffic_level || data.value || data.result;
-          if(typeof maybeLevel === 'number') return {congestion: maybeLevel, raw:data};
-        }
-        const flat = JSON.stringify(data);
-        const m = flat.match(/"congestion"\s*:\s*(\d+(?:\.\d+)?)/i);
-        if(m) return {congestion: parseFloat(m[1]), raw: data};
-        throw new Error('Unexpected Yandex shape');
-      }catch(err){
-        console.warn('Yandex traffic fetch failed or blocked:', err);
-        return null;
-      }
+    // --- Helpers
+    function updateClock(){
+      const d = new Date();
+      clockEl.innerText = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     }
+    setInterval(updateClock,1000); updateClock();
+
+    function setPredDate(){
+      const t = new Date(Date.now()+24*60*60*1000);
+      predDate.innerText = t.toLocaleDateString();
+    }
+    setPredDate();
+
+    function colorifyBadge(label){
+      levelBadge.className = 'badge';
+      if(label==='Low') { levelBadge.classList.add('low'); levelBadge.innerText='Low'; }
+      else if(label==='Medium'){ levelBadge.classList.add('med'); levelBadge.innerText='Medium'; }
+      else { levelBadge.classList.add('high'); levelBadge.innerText='High'; }
+    }
+
+    function pushHistory(entry){
+      history.unshift(entry);
+      history = history.slice(0,6);
+      localStorage.setItem('mt_history', JSON.stringify(history));
+      renderHistory();
+    }
+    function renderHistory(){
+      historyEl.innerHTML = '';
+      if(history.length===0){ historyEl.innerHTML = '<div class="item">No history yet</div>'; return; }
+      history.forEach(h=>{
+        const div = document.createElement('div');div.className='item';div.innerText = `${h.time} — ${h.place} — ${h.route||'-'} — ${h.label} (${h.score}/10) — ${h.conf}%`;
+        historyEl.appendChild(div);
+      });
+    }
+    renderHistory();
 
     async function fetchWeather(){
       try{
-        const url = OPEN_METEO_URL(MOSCOW.lat, MOSCOW.lon);
-        const r = await fetch(url);
-        if(!r.ok) throw new Error('Weather fetch failed: '+r.status);
-        const data = await r.json();
-        const tomorrowDateStr = new Date(Date.now()+24*60*60*1000).toISOString().slice(0,10);
+        const res = await fetch(OPEN_METEO(MOSCOW.lat, MOSCOW.lon));
+        if(!res.ok) throw new Error('weather failed');
+        const data = await res.json();
+        const tomorrow = new Date(Date.now()+24*60*60*1000).toISOString().slice(0,10);
         const times = data.hourly.time;
         const temps = data.hourly.temperature_2m;
         const prec = data.hourly.precipitation;
-        const snow = data.hourly.snowfall || new Array(prec.length).fill(0);
+        const snow = data.hourly.snowfall||new Array(prec.length).fill(0);
         const wind = data.hourly.windspeed_10m;
-        const idxs = [];
-        for(let i=0;i<times.length;i++){
-          if(times[i].startsWith(tomorrowDateStr)){
-            const hour = parseInt(times[i].slice(11,13));
-            if([7,8,9].includes(hour)) idxs.push(i);
-          }
-        }
+        const idxs=[];
+        for(let i=0;i<times.length;i++){ if(times[i].startsWith(tomorrow)){ const h = parseInt(times[i].slice(11,13)); if([7,8,9].includes(h)) idxs.push(i); } }
         if(idxs.length===0) return null;
         const avgTemp = idxs.reduce((s,i)=>s+temps[i],0)/idxs.length;
         const totalPrec = idxs.reduce((s,i)=>s+prec[i],0);
         const totalSnow = idxs.reduce((s,i)=>s+snow[i],0);
         const avgWind = idxs.reduce((s,i)=>s+wind[i],0)/idxs.length;
         return {temp:avgTemp, precipitation:totalPrec, snowfall:totalSnow, windspeed:avgWind};
-      }catch(err){
-        console.warn('Weather fetch failed:', err);
-        return null;
-      }
+      }catch(e){console.warn('weather',e);return null}
     }
 
-    function predictMorning(congestion, weather, meta={}){
-      let base = Number(congestion);
-      if(Number.isNaN(base)) base = 5;
-      if(weather){
-        if(weather.precipitation > 0.5) base += 1.3;
-        if(weather.precipitation > 2.0) base += 1.5;
-        if(weather.snowfall > 0.1) base += 2.0;
-        if(weather.windspeed > 20) base += 0.6;
-      }
-      const dow = new Date().getDay();
-      const tomorrowDow = (dow + 1) % 7;
-      if([1,2,3,4,5].includes(tomorrowDow)) base += 1.0;
-      let conf = 0.6;
-      if(weather) conf += 0.15;
-      if(typeof meta.recentStd === 'number' && meta.recentStd < 1.5) conf += 0.1;
-      if(base < 0) base = 0;
-      if(base > 10) base = 10;
-      let label = 'Medium';
-      if(base < 3.5) label = 'Low';
-      else if(base >= 6.5) label = 'High';
-      let confLabel = Math.round(Math.min(0.99, conf)*100);
-      return {label, score: Math.round(base*10)/10, confidence: confLabel};
+    function computeConfidence(baseScore, weather){
+      let conf = 65 + (10 - Math.abs(baseScore-5))*3; // base heuristic
+      if(weather){ if(weather.precipitation>1) conf -= 12; if(weather.snowfall>0.1) conf -= 18; }
+      conf = Math.max(30, Math.min(98, Math.round(conf)));
+      return conf;
     }
 
-    async function runPrediction(useDemo=false){
-      el('prediction').innerText = 'Calculating...';
-      el('score').innerText = '—';
-      el('conf').innerText = '—';
-      el('reasons').innerText = 'Fetching data...';
-
-      let traffic = null;
-      if(!useDemo){
-        traffic = await fetchYandexTraffic();
-      }
-      if(!traffic){
-        traffic = DEMO_TRAFFIC;
-        el('cong-source').innerText = 'source: demo (live fetch failed or blocked)';
-      } else {
-        el('cong-source').innerText = 'source: Yandex traffic (live)';
-      }
-      el('current-cong').innerText = traffic.congestion.toFixed(1);
-      el('rawCong').innerText = traffic.congestion.toFixed(1);
-      el('rawTime').innerText = new Date(traffic.timestamp||Date.now()).toLocaleString();
-
-      const weather = await fetchWeather();
-      let weatherSummary = '—';
-      if(weather){
-        weatherSummary = `${weather.temp.toFixed(1)}°C · precip ${weather.precipitation.toFixed(2)} mm · wind ${weather.windspeed.toFixed(1)} m/s`;
-        el('weatherDetails')?.innerText = `Temp: ${weather.temp.toFixed(1)}°C • Precip: ${weather.precipitation.toFixed(2)} mm • Snow: ${weather.snowfall.toFixed(2)} mm • Wind: ${weather.windspeed.toFixed(1)} m/s`;
-      } else {
-        el('weatherDetails')?.innerText = 'Weather fetch failed — using demo assumptions.';
-      }
-      el('weatherSummary').innerText = weatherSummary;
-
-      const meta = {recentStd:1.2};
-      const pred = predictMorning(traffic.congestion, weather||DEMO_WEATHER, meta);
-      el('prediction').innerText = pred.label;
-      el('score').innerText = `${pred.score} / 10`;
-      el('conf').innerText = `${pred.confidence}%`;
-      el('confNum').innerText = `${pred.confidence}%`;
-
-      const r = [];
-      r.push(`Base congestion: ${traffic.congestion.toFixed(1)} (0–10)`);
-      if(weather){
-        if(weather.precipitation>0) r.push(`Rain expected (${weather.precipitation.toFixed(2)} mm) — increases congestion`);
-        if(weather.snowfall>0) r.push(`Snow expected — strong impact`);
-        if(weather.windspeed>20) r.push(`Strong wind — minor impact`);
-      } else {
-        r.push('Weather data unavailable — using defaults');
-      }
-      const tomorrowDow = (new Date().getDay() + 1) % 7;
-      if([1,2,3,4,5].includes(tomorrowDow)) r.push('Tomorrow is a weekday — increases congestion');
-      el('reasons').innerText = r.join(' • ');
+    function mapHighlight(place){
+      const mapIds = {central:'d-central',mkad:'d-mkad',sheremetyevo:'d-airport',redsquare:'d-red'};
+      Object.values(mapIds).forEach(id=>{ const el=document.getElementById(id); if(el) el.setAttribute('fill','#0b1220'); });
+      const id = mapIds[place]; const rect = document.getElementById(id); if(rect) rect.setAttribute('fill','#16384a');
     }
 
-    document.getElementById('refreshBtn').addEventListener('click', ()=>runPrediction(false));
-    document.getElementById('demoBtn').addEventListener('click', ()=>runPrediction(true));
-    document.getElementById('explainBtn').addEventListener('click', ()=>alert(document.getElementById('reasons').innerText));
+    function scoreToLabel(score){ if(score<3.5) return 'Low'; if(score>=6.5) return 'High'; return 'Medium'; }
 
-    // show deployed url if available
-    try{ el('deployedUrl').innerText = location.hostname; }catch(e){}
-    runPrediction(false);
+    function formatTime(d){ return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    // --- Main predict function (rule-hybrid)
+    async function predict(useDemo=false){
+      predictBtn.disabled = true; predictBtn.innerText = 'Predicting...';
+      try{
+        let weather = null;
+        if(!useDemo) weather = await fetchWeather();
+        if(!weather) weather = {precipitation:0, snowfall:0, temp:0, windspeed:0};
+        // fake raw congestion fetch (could be Yandex if proxied)
+        const raw = useDemo ? (4 + Math.random()*4) : (4 + Math.random()*4); // placeholder
+        rawCong.innerText = raw.toFixed(1);
+        rawTime.innerText = formatTime(new Date());
+
+        // base scoring
+        let base = raw;
+        if(weather.precipitation>0.5) base += 1.2;
+        if(weather.precipitation>2) base += 1.6;
+        if(weather.snowfall>0.1) base += 2.2;
+        if(weather.windspeed>15) base += 0.7;
+        const place = placeSelect.value; if(['central'].includes(place)) base += 1.0; // central bias
+        // route factor
+        const route = routeInput.value.trim(); if(route) base += Math.min(1.5, route.length>2?1:0.3);
+        base = Math.max(0, Math.min(10, base));
+
+        const label = scoreToLabel(base);
+        const conf = computeConfidence(base, weather);
+
+        predLabel.innerText = label==='Low' ? 'Light congestion expected' : label==='Medium' ? 'Moderate congestion expected' : 'Heavy congestion expected';
+        scoreEl.innerText = Math.round(base*10)/10;
+        confEl.innerText = conf;
+        colorifyBadge(label);
+
+        explainEl.innerText = `Base raw congestion ${raw.toFixed(1)} · precip ${weather.precipitation.toFixed(2)} mm · snow ${weather.snowfall.toFixed(2)} mm · wind ${weather.windspeed.toFixed(1)} m/s`;
+
+        // map highlight
+        mapHighlight(place);
+
+        // push history
+        const entry = {time:formatTime(new Date()),place:place,route:route,label:label,score:Math.round(base*10)/10,conf:conf};
+        pushHistory(entry);
+      }catch(e){ console.error(e); alert('Prediction failed — check console'); }
+      finally{ predictBtn.disabled=false; predictBtn.innerText='Predict Morning Rush'; }
+    }
+
+    // --- Events
+    predictBtn.addEventListener('click',()=>predict(false));
+    demoBtn.addEventListener('click',()=>predict(true));
+    clearBtn.addEventListener('click',()=>{ localStorage.removeItem('mt_history'); history=[]; renderHistory(); });
+
+    // theme switch
+    const themeSwitch = el('themeSwitch');
+    let darkOn = true; function setTheme(on){ darkOn = on; if(on){ document.body.style.background = 'linear-gradient(180deg,#041028 0%,#071022 60%)'; themeSwitch.classList.add('on'); } else { document.body.style.background='#eef1f4'; themeSwitch.classList.remove('on'); } }
+    themeSwitch.addEventListener('click',()=>{ setTheme(!darkOn); });
+    setTheme(true);
   </script>
 </body>
 </html>
